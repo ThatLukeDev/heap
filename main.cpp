@@ -7,11 +7,12 @@ int main() {
 	*num1 = 4;
 	*num2 = 6;
 	*num3 = 8;
-	std::clog << *num1 << std::endl;
-	std::clog << *num2 << std::endl;
-	std::clog << *num3 << std::endl;
 
-	std::clog << std::endl;
+	heap.free(num1);
+	heap.free(num2);
+	heap.free(num3);
+
+	heap.show();
 
 	return 0;
 }

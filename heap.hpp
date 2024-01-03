@@ -12,15 +12,45 @@ static class {
 		unsigned int size = 0;
 		bool free = true;
 		chunk* next = nullptr;
+		chunk* prev = nullptr;
 
 		chunk(unsigned int _size) : size(_size) { }
 
 		void split(unsigned int _size) {
 			chunk* fragment = this + sizeof(*this) + _size;
-			*fragment = chunk(size - _size - 2 * sizeof(*this));
+			*fragment = chunk(size - _size - sizeof(*this));
 			fragment->next = this->next;
+			fragment->prev = this;
 			size = _size;
 			next = fragment;
+		}
+		chunk* zipFree() {
+			if (!prev) {
+				return this;
+			}
+			if (prev->free) {
+				return prev->zipFree();
+			}
+			return this;
+		}
+		void defragForward() {
+			if (next) if (next->free) {
+				next->defragForward();
+			}
+			if (!prev) {
+				return;
+			}
+			if (!prev->free) {
+				return;
+			}
+			if (next) {
+				next->prev = prev;
+			}
+			prev->size += sizeof(*this) + size;
+			prev->next = next;
+		}
+		void defrag() {
+			zipFree()->defragForward();
 		}
 	};
 
@@ -32,20 +62,39 @@ static class {
 		return (char)0;
 	}
 	char p_m = _init();
+
 public:
+
+	void show() {
+		std::clog << "[ ";
+		for (chunk* v = start; v; v = v->next) {
+			std::clog << v->size + sizeof(chunk) << " (" << v->size << " usable)";
+			if (v->next) {
+				std::clog << " | ";
+			}
+		}
+		std::clog << " ]" << std::endl;
+	}
 
 	void* allocate(unsigned int _size) {
 		for (chunk* v = start; v; v = v->next) {
 			if (v->free && v->size >= _size) {
 				v->split(_size);
 				v->free = false;
-				return (void*)v;
+				return (void*)(v + sizeof(*v));
 			}
 		}
 		return nullptr;
 	}
+
 	void free(void* ptr) {
-		return;
+		for (chunk* v = start; v; v = v->next) {
+			if (ptr == (void*)(v + sizeof(chunk))) {
+				v->free = true;
+				v->defrag();
+				break;
+			}
+		}
 	}
 } heap;
 
