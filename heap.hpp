@@ -96,6 +96,15 @@ public:
 			}
 		}
 	}
+
+	template <typename T>
+	T* allocate() {
+		return (T*)allocate(sizeof(T));
+	}
+	template <typename T>
+	void free(T ptr) {
+		free((void*)ptr);
+	}
 } heap;
 
 #endif
