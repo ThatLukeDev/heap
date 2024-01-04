@@ -13,14 +13,16 @@ static class {
 		bool free = true;
 		chunk* next = nullptr;
 		chunk* prev = nullptr;
+		unsigned int pid = 0;
 
 		chunk(unsigned int _size) : size(_size) { }
 
 		void split(unsigned int _size) {
-			chunk* fragment = this + sizeof(*this) + _size;
-			*fragment = chunk(size - _size - sizeof(*this));
+			chunk* fragment = (chunk*)((long)this + (long)sizeof(chunk) + (long)_size);
+			*fragment = chunk(size - _size - sizeof(chunk));
 			fragment->next = this->next;
 			fragment->prev = this;
+			fragment->pid = pid;
 			size = _size;
 			next = fragment;
 		}
@@ -46,7 +48,10 @@ static class {
 			if (next) {
 				next->prev = prev;
 			}
-			prev->size += sizeof(*this) + size;
+			if (prev->pid != pid) {
+				return;
+			}
+			prev->size += sizeof(chunk) + size;
 			prev->next = next;
 		}
 		void defrag() {
@@ -59,9 +64,20 @@ static class {
 	char _init() {
 		start = (chunk*)mmap(0, DEFAULT_SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
 		*start = chunk(DEFAULT_SIZE - sizeof(chunk));
+		start->pid = (unsigned long)start;
 		return (char)0;
 	}
 	char p_m = _init();
+
+	void expand() {
+		chunk* newChunk = (chunk*)mmap(start, DEFAULT_SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+		*newChunk = chunk(DEFAULT_SIZE - sizeof(chunk));
+		chunk* head = start;
+		for (; head->next; head = head->next) ;
+		newChunk->prev = head;
+		head->next = newChunk;
+		newChunk->pid = (unsigned long)newChunk;
+	}
 
 public:
 
@@ -70,21 +86,27 @@ public:
 		for (chunk* v = start; v; v = v->next) {
 			std::clog << v->size + sizeof(chunk) << " (" << v->size << " usable)";
 			if (v->next) {
-				std::clog << " | ";
+				if (v->pid != v->next->pid) {
+					std::clog << " | ";
+				}
+				else {
+					std::clog << " + ";
+				}
 			}
 		}
-		std::clog << " ]" << std::endl;
+		std::clog << " ]\n" << std::endl;
 	}
 
 	void* allocate(unsigned int _size) {
 		for (chunk* v = start; v; v = v->next) {
-			if (v->free && v->size >= _size) {
+			if (v->free && v->size >= _size + sizeof(chunk)) {
 				v->split(_size);
 				v->free = false;
-				return (void*)(v + sizeof(*v));
+				return (void*)(v + sizeof(chunk));
 			}
 		}
-		return nullptr;
+		expand();
+		return allocate(_size);
 	}
 
 	void free(void* ptr) {
