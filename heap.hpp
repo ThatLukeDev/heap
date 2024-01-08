@@ -3,6 +3,7 @@
 
 #include <sys/mman.h>
 #include <iostream>
+#include <cmath>
 
 static class {
 	const unsigned int DEFAULT_SIZE = 4096;
@@ -69,9 +70,9 @@ static class {
 	}
 	char p_m = _init();
 
-	void expand() {
-		chunk* newChunk = (chunk*)mmap(start, DEFAULT_SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-		*newChunk = chunk(DEFAULT_SIZE - sizeof(chunk));
+	void expand(unsigned int chunks) {
+		chunk* newChunk = (chunk*)mmap(start, chunks * DEFAULT_SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+		*newChunk = chunk(chunks * DEFAULT_SIZE - sizeof(chunk));
 		chunk* head = start;
 		for (; head->next; head = head->next) ;
 		newChunk->prev = head;
@@ -105,7 +106,7 @@ public:
 				return (void*)(v + sizeof(chunk));
 			}
 		}
-		expand();
+		expand((unsigned int)std::ceil(double(_size + sizeof(chunk)) / double(DEFAULT_SIZE)));
 		return allocate(_size);
 	}
 
